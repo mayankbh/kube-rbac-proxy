@@ -27,19 +27,9 @@ import (
 	"time"
 )
 
-func initTransport(upstreamCAFile string) (http.RoundTripper, error) {
-	if upstreamCAFile == "" {
+func initTransport(upstreamCAFile, upstreamClientCertFile, upstreamClientKeyFile string) (http.RoundTripper, error) {
+	if upstreamCAFile == "" && upstreamClientCertFile == "" && upstreamClientKeyFile == "" {
 		return http.DefaultTransport, nil
-	}
-
-	rootPEM, err := ioutil.ReadFile(upstreamCAFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading upstream CA file: %v", err)
-	}
-
-	roots := x509.NewCertPool()
-	if ok := roots.AppendCertsFromPEM([]byte(rootPEM)); !ok {
-		return nil, errors.New("error parsing upstream CA certificate")
 	}
 
 	// http.Transport sourced from go 1.10.7
@@ -54,8 +44,49 @@ func initTransport(upstreamCAFile string) (http.RoundTripper, error) {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{RootCAs: roots},
+		TLSClientConfig:       &tls.Config{},
 	}
 
+	// If RootCAs is nil, the system root certificates will be used.
+	if upstreamCAFile != "" {
+		roots, err := loadRootCA(upstreamCAFile)
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig.RootCAs = roots
+	}
+
+	if upstreamClientCertFile != "" && upstreamClientKeyFile != "" {
+		clientCert, err := loadClientCertificateCredentials(upstreamClientCertFile, upstreamClientKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig.Certificates = []tls.Certificate{clientCert}
+	}
 	return transport, nil
+}
+
+func loadRootCA(upstreamCAFile string) (*x509.CertPool, error) {
+	rootPEM, err := ioutil.ReadFile(upstreamCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading upstream CA file: %v", err)
+	}
+
+	roots := x509.NewCertPool()
+	if ok := roots.AppendCertsFromPEM([]byte(rootPEM)); !ok {
+		return nil, errors.New("error parsing upstream CA certificate")
+	}
+	return roots, nil
+}
+
+// injectClientCertificateCredentials adds the provided client certificate and
+// key to the given HTTP transport. This is used when authenticating to
+// upstreams using client certificate credentials.
+func loadClientCertificateCredentials(certificateFilePath, keyFilePath string) (tls.Certificate, error) {
+	cert, err := tls.LoadX509KeyPair(certificateFilePath, keyFilePath)
+	if err != nil {
+		return tls.Certificate{}, nil
+	}
+
+	return cert, nil
 }

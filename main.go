@@ -52,16 +52,18 @@ import (
 )
 
 type config struct {
-	insecureListenAddress string
-	secureListenAddress   string
-	upstream              string
-	upstreamForceH2C      bool
-	upstreamCAFile        string
-	auth                  proxy.Config
-	tls                   tlsConfig
-	kubeconfigLocation    string
-	allowPaths            []string
-	ignorePaths           []string
+	insecureListenAddress  string
+	secureListenAddress    string
+	upstream               string
+	upstreamForceH2C       bool
+	upstreamCAFile         string
+	upstreamClientCertFile string
+	upstreamClientKeyFile  string
+	auth                   proxy.Config
+	tls                    tlsConfig
+	kubeconfigLocation     string
+	allowPaths             []string
+	ignorePaths            []string
 }
 
 type tlsConfig struct {
@@ -103,6 +105,10 @@ func main() {
 	flagset.StringVar(&cfg.upstream, "upstream", "", "The upstream URL to proxy to once requests have successfully been authenticated and authorized.")
 	flagset.BoolVar(&cfg.upstreamForceH2C, "upstream-force-h2c", false, "Force h2c to communiate with the upstream. This is required when the upstream speaks h2c(http/2 cleartext - insecure variant of http/2) only. For example, go-grpc server in the insecure mode, such as helm's tiller w/o TLS, speaks h2c only")
 	flagset.StringVar(&cfg.upstreamCAFile, "upstream-ca-file", "", "The CA the upstream uses for TLS connection. This is required when the upstream uses TLS and its own CA certificate")
+	// TODO Should this be a trust bundle instead of a single cert?
+	// TODO input validation? (ie. both cert and key must be provided)
+	flagset.StringVar(&cfg.upstreamClientCertFile, "upstream-client-cert-file", "", "The client certificate to use to authenticate to the upstream.")
+	flagset.StringVar(&cfg.upstreamClientKeyFile, "upstream-client-key-file", "", "The client key to use to authenticate to the upstream.")
 	flagset.StringVar(&configFileName, "config-file", "", "Configuration file to configure kube-rbac-proxy.")
 	flagset.StringSliceVar(&cfg.allowPaths, "allow-paths", nil, "Comma-separated list of paths against which kube-rbac-proxy matches the incoming request. If the request doesn't match, kube-rbac-proxy responds with a 404 status code. If omitted, the incoming request path isn't checked. Cannot be used with --ignore-paths.")
 	flagset.StringSliceVar(&cfg.ignorePaths, "ignore-paths", nil, "Comma-separated list of paths against which kube-rbac-proxy will proxy without performing an authentication or authorization check. Cannot be used with --allow-paths.")
@@ -208,7 +214,16 @@ func main() {
 		klog.Fatalf("Failed to create rbac-proxy: %v", err)
 	}
 
-	upstreamTransport, err := initTransport(cfg.upstreamCAFile)
+	// Input validation to make sure both upstream client cert and key flags
+	// are passed in.
+	if cfg.upstreamClientCertFile != "" || cfg.upstreamClientKeyFile != "" {
+		// If one of them is passed in, make sure both of them are set.
+		if cfg.upstreamClientCertFile == "" || cfg.upstreamClientKeyFile == "" {
+			klog.Fatal("When using client certificates to authenticate to upstream, both --upstream-client-cert-file and --upstream-client-key-file must be provided.")
+		}
+	}
+
+	upstreamTransport, err := initTransport(cfg.upstreamCAFile, cfg.upstreamClientCertFile, cfg.upstreamClientKeyFile)
 	if err != nil {
 		klog.Fatalf("Failed to set up upstream TLS connection: %v", err)
 	}

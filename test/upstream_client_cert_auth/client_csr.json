@@ -1,0 +1,12 @@
+{
+    "CN": "client123",
+    "names": [
+        {
+            "C":  "US",
+            "L":  "San Francisco",
+            "O":  "an",
+            "OU": "authenticating client",
+            "ST": "California"
+        }
+    ]
+}

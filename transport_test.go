@@ -21,7 +21,7 @@ import (
 )
 
 func TestInitTransportWithDefault(t *testing.T) {
-	roundTripper, err := initTransport("")
+	roundTripper, err := initTransport("", "", "")
 	if err != nil {
 		t.Errorf("want err to be nil, but got %v", err)
 		return
@@ -32,7 +32,7 @@ func TestInitTransportWithDefault(t *testing.T) {
 }
 
 func TestInitTransportWithCustomCA(t *testing.T) {
-	roundTripper, err := initTransport("test/ca.pem")
+	roundTripper, err := initTransport("test/ca.pem", "", "")
 	if err != nil {
 		t.Errorf("want err to be nil, but got %v", err)
 		return
@@ -40,5 +40,17 @@ func TestInitTransportWithCustomCA(t *testing.T) {
 	transport := roundTripper.(*http.Transport)
 	if transport.TLSClientConfig.RootCAs == nil {
 		t.Error("expected root CA to be set, got nil")
+	}
+}
+
+func TestInitTransportWithClientCerts(t *testing.T) {
+	roundTripper, err := initTransport("", "test/upstream_client_cert_auth/client.pem", "test/upstream_client_cert_auth/client-key.pem")
+	if err != nil {
+		t.Errorf("want err to be nil, but got %v", err)
+		return
+	}
+	transport := roundTripper.(*http.Transport)
+	if transport.TLSClientConfig.Certificates == nil {
+		t.Error("expected client Certificates to be set, got nil")
 	}
 }

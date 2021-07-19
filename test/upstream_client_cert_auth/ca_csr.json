@@ -1,0 +1,12 @@
+{
+    "CN": "client cert auth CA",
+    "names": [
+        {
+            "C":  "US",
+            "L":  "San Francisco",
+            "O":  "client.",
+            "OU": "cert auth",
+            "ST": "California"
+        }
+    ]
+}
